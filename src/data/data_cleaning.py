@@ -19,6 +19,7 @@ import re
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 
 # Column renaming mapping: survey questions to standardized variable names
@@ -132,6 +133,24 @@ def clean_base_features(df_raw):
                 .str.replace(r"[^\w\s]", "", regex=True)
                 .str.strip()
             )
+    
+        vectorizer = TfidfVectorizer(
+            max_features=5,
+            stop_words="english"
+        )
+        tfidf = vectorizer.fit_transform(df[f"{col}_clean"])
+
+        tfidf_df = pd.DataFrame(
+            tfidf.toarray(),
+            columns=[
+                f"{col}_tfidf_{word}"
+                for word in vectorizer.get_feature_names_out()
+            ],
+            index=df.index
+        )
+
+        df = pd.concat([df, tfidf_df], axis=1)
+
 
     # Step 7: Map label if present
     if "target_sport" in df.columns:
@@ -186,7 +205,7 @@ def apply_statistical_transformations(df, params):
     return df_out
 
 
-def split_and_clean_pipeline(csv_path="csc311_project_training_202609.csv", random_state=42):
+def split_and_clean_pipeline(csv_path="../data/csc311_project_training_202609.csv", random_state=42):
     """
     Executes the end-to-end 70% Train, 15% Val, 15% Test split and cleaning pipeline.
     Ensures zero data leakage.
@@ -227,3 +246,4 @@ if __name__ == "__main__":
     print("Learned Training Parameters (Never computed on val/test):")
     for k, v in params.items():
         print(f"  {k}: {v:.4f}")
+    
