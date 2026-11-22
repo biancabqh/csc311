@@ -114,11 +114,78 @@ def clean_base_features(df_raw):
             df[f"{col}_num"] = df[col].map(LIKERT_MAP)
 
     # Step 5: Multi-select questions to binary multi-hot encoding
+    PLAY_SEASON_CATEGORIES = ["Spring", "Summer", "Fall", "Winter", "None"]
+    PLAY_LOCATION_CATEGORIES = [
+        "Outdoor public space", 
+        "School or university facility", 
+        "Private sports facility",
+        "Community recreation facility",
+        "Indoor facility",
+        "At home or nearby",
+        "Others",
+        "None"
+    ]
+    ASSOCIATED_MUSIC_CATEGORIES = [
+        "Hip-hop or rap",
+        "Pop",
+        "Rock",
+        "Electronic or dance",
+        "No particular type",
+        "Latin",
+        "Country",
+        "Folk or traditional",
+        "Classical or jazz",
+        "Other",
+        "None"
+    ]
     multi_select_cols = ["play_season", "play_location", "associated_music"]
-    for col in multi_select_cols:
-        if col in df.columns:
-            dummies = df[col].fillna("None").str.get_dummies(sep=",").add_prefix(f"{col}_")
-            df = pd.concat([df, dummies], axis=1)
+    if "play_season" in df.columns:
+        dummies = (
+            df["play_season"]
+            .fillna("None")
+            .str.get_dummies(sep=",")
+        )
+
+        dummies = dummies.reindex(
+            columns=PLAY_SEASON_CATEGORIES,
+            fill_value=0
+        )
+
+        dummies = dummies.add_prefix("play_season_")
+
+        df = pd.concat([df, dummies], axis=1)
+
+    if "play_location" in df.columns:
+        dummies = (
+            df["play_location"]
+            .fillna("None")
+            .str.get_dummies(sep=",")
+        )
+
+        dummies = dummies.reindex(
+            columns=PLAY_LOCATION_CATEGORIES,
+            fill_value=0
+        )
+
+        dummies = dummies.add_prefix("play_location_")
+
+        df = pd.concat([df, dummies], axis=1)
+
+    if "associated_music" in df.columns:
+        dummies = (
+            df["associated_music"]
+            .fillna("None")
+            .str.get_dummies(sep=",")
+        )
+
+        dummies = dummies.reindex(
+            columns=ASSOCIATED_MUSIC_CATEGORIES,
+            fill_value=0
+        )
+
+        dummies = dummies.add_prefix("associated_music_")
+
+        df = pd.concat([df, dummies], axis=1)
 
     # Step 6: Free-text normalization and missingness indicators
     text_cols = ["associated_foods_drinks", "associated_color", "associated_song", "emotional_response"]
@@ -133,24 +200,6 @@ def clean_base_features(df_raw):
                 .str.replace(r"[^\w\s]", "", regex=True)
                 .str.strip()
             )
-    
-        vectorizer = TfidfVectorizer(
-            max_features=5,
-            stop_words="english"
-        )
-        tfidf = vectorizer.fit_transform(df[f"{col}_clean"])
-
-        tfidf_df = pd.DataFrame(
-            tfidf.toarray(),
-            columns=[
-                f"{col}_tfidf_{word}"
-                for word in vectorizer.get_feature_names_out()
-            ],
-            index=df.index
-        )
-
-        df = pd.concat([df, tfidf_df], axis=1)
-
 
     # Step 7: Map label if present
     if "target_sport" in df.columns:
@@ -234,6 +283,48 @@ def split_and_clean_pipeline(csv_path="../data/csc311_project_training_202609.cs
     val_clean = apply_statistical_transformations(val_base, learned_params)
     test_clean = apply_statistical_transformations(test_base, learned_params)
 
+    # Step D: Apply TFIDF
+
+    text_cols = ["associated_foods_drinks", "associated_color", "associated_song", "emotional_response"]
+    for col in text_cols:
+        vectorizer = TfidfVectorizer(
+            max_features=5,
+            stop_words="english"
+        )
+        x_train = vectorizer.fit_transform(train_clean[f"{col}_clean"])
+        x_val = vectorizer.transform(val_clean[f"{col}_clean"])
+        x_test = vectorizer.transform(test_clean[f"{col}_clean"])
+
+        train_tfidf_df = pd.DataFrame(
+            x_train.toarray(),
+            columns=[
+                f"{col}_tfidf_{word}"
+                for word in vectorizer.get_feature_names_out()
+            ],
+            index=train_clean.index
+        )
+
+        val_tfidf_df = pd.DataFrame(
+            x_val.toarray(),
+            columns=[
+                f"{col}_tfidf_{word}"
+                for word in vectorizer.get_feature_names_out()
+            ],
+            index=val_clean.index
+        )
+
+        test_tfidf_df = pd.DataFrame(
+            x_test.toarray(),
+            columns=[
+                f"{col}_tfidf_{word}"
+                for word in vectorizer.get_feature_names_out()
+            ],
+            index=test_clean.index
+        )
+
+        train_clean = pd.concat([train_clean, train_tfidf_df], axis=1)
+        val_clean = pd.concat([val_clean, val_tfidf_df], axis=1)
+        test_clean = pd.concat([test_clean, test_tfidf_df], axis=1)
     return train_clean, val_clean, test_clean, learned_params
 
 
