@@ -15,10 +15,12 @@ This script implements the complete data preprocessing workflow:
    STRICTLY on the training split, and then applied to transform validation and test splits.
 """
 
+import os
 import re
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 
 # Column renaming mapping: survey questions to standardized variable names
@@ -113,11 +115,78 @@ def clean_base_features(df_raw):
             df[f"{col}_num"] = df[col].map(LIKERT_MAP)
 
     # Step 5: Multi-select questions to binary multi-hot encoding
+    PLAY_SEASON_CATEGORIES = ["Spring", "Summer", "Fall", "Winter", "None"]
+    PLAY_LOCATION_CATEGORIES = [
+        "Outdoor public space", 
+        "School or university facility", 
+        "Private sports facility",
+        "Community recreation facility",
+        "Indoor facility",
+        "At home or nearby",
+        "Others",
+        "None"
+    ]
+    ASSOCIATED_MUSIC_CATEGORIES = [
+        "Hip-hop or rap",
+        "Pop",
+        "Rock",
+        "Electronic or dance",
+        "No particular type",
+        "Latin",
+        "Country",
+        "Folk or traditional",
+        "Classical or jazz",
+        "Other",
+        "None"
+    ]
     multi_select_cols = ["play_season", "play_location", "associated_music"]
-    for col in multi_select_cols:
-        if col in df.columns:
-            dummies = df[col].fillna("None").str.get_dummies(sep=",").add_prefix(f"{col}_")
-            df = pd.concat([df, dummies], axis=1)
+    if "play_season" in df.columns:
+        dummies = (
+            df["play_season"]
+            .fillna("None")
+            .str.get_dummies(sep=",")
+        )
+
+        dummies = dummies.reindex(
+            columns=PLAY_SEASON_CATEGORIES,
+            fill_value=0
+        )
+
+        dummies = dummies.add_prefix("play_season_")
+
+        df = pd.concat([df, dummies], axis=1)
+
+    if "play_location" in df.columns:
+        dummies = (
+            df["play_location"]
+            .fillna("None")
+            .str.get_dummies(sep=",")
+        )
+
+        dummies = dummies.reindex(
+            columns=PLAY_LOCATION_CATEGORIES,
+            fill_value=0
+        )
+
+        dummies = dummies.add_prefix("play_location_")
+
+        df = pd.concat([df, dummies], axis=1)
+
+    if "associated_music" in df.columns:
+        dummies = (
+            df["associated_music"]
+            .fillna("None")
+            .str.get_dummies(sep=",")
+        )
+
+        dummies = dummies.reindex(
+            columns=ASSOCIATED_MUSIC_CATEGORIES,
+            fill_value=0
+        )
+
+        dummies = dummies.add_prefix("associated_music_")
+
+        df = pd.concat([df, dummies], axis=1)
 
     # Step 6: Free-text normalization and missingness indicators
     text_cols = ["associated_foods_drinks", "associated_color", "associated_song", "emotional_response"]
@@ -186,11 +255,22 @@ def apply_statistical_transformations(df, params):
     return df_out
 
 
-def split_and_clean_pipeline(csv_path="csc311_project_training_202609.csv", random_state=42):
+def split_and_clean_pipeline(csv_path="../data/csc311_project_training_202609.csv", random_state=42):
     """
     Executes the end-to-end 70% Train, 15% Val, 15% Test split and cleaning pipeline.
     Ensures zero data leakage.
     """
+    if not os.path.exists(csv_path):
+        candidate_paths = [
+            "data/csc311_project_training_202609.csv",
+            "../data/csc311_project_training_202609.csv",
+            os.path.join(os.path.dirname(__file__), "../../data/csc311_project_training_202609.csv"),
+            os.path.join(os.path.dirname(__file__), "../../../data/csc311_project_training_202609.csv"),
+        ]
+        for p in candidate_paths:
+            if os.path.exists(p):
+                csv_path = p
+                break
     raw_df = pd.read_csv(csv_path)
 
     # Split unique respondents: 70% train (203 IDs), 15% val (43 IDs), 15% test (44 IDs)
@@ -215,6 +295,53 @@ def split_and_clean_pipeline(csv_path="csc311_project_training_202609.csv", rand
     val_clean = apply_statistical_transformations(val_base, learned_params)
     test_clean = apply_statistical_transformations(test_base, learned_params)
 
+    # Step D: Apply TF-IDF on free-text columns
+    # i change 2 of the oigianl list, we may need the ones we standardeized.
+    text_cols = ["associated_foods_drinks", "associated_color", "associated_song", "emotional_response"]
+    vectorizers = {}
+    for col in text_cols:
+        # i recheck all the features, 5 may loose a lot of terms. as we have similar frequency amount for 6-10. 5-25 includes bit more meaning words that may be more helpful? probably we may change 5 to 25 now, we can always change this later probably.
+        vectorizer = TfidfVectorizer(
+            max_features=25,
+            stop_words="english"
+        )
+        x_train = vectorizer.fit_transform(train_clean[f"{col}_clean"])
+        x_val = vectorizer.transform(val_clean[f"{col}_clean"])
+        x_test = vectorizer.transform(test_clean[f"{col}_clean"])
+        vectorizers[col] = vectorizer
+
+        train_tfidf_df = pd.DataFrame(
+            x_train.toarray(),
+            columns=[
+                f"{col}_tfidf_{word}"
+                for word in vectorizer.get_feature_names_out()
+            ],
+            index=train_clean.index
+        )
+
+        val_tfidf_df = pd.DataFrame(
+            x_val.toarray(),
+            columns=[
+                f"{col}_tfidf_{word}"
+                for word in vectorizer.get_feature_names_out()
+            ],
+            index=val_clean.index
+        )
+
+        test_tfidf_df = pd.DataFrame(
+            x_test.toarray(),
+            columns=[
+                f"{col}_tfidf_{word}"
+                for word in vectorizer.get_feature_names_out()
+            ],
+            index=test_clean.index
+        )
+
+        train_clean = pd.concat([train_clean, train_tfidf_df], axis=1)
+        val_clean = pd.concat([val_clean, val_tfidf_df], axis=1)
+        test_clean = pd.concat([test_clean, test_tfidf_df], axis=1)
+
+    learned_params["vectorizers"] = vectorizers
     return train_clean, val_clean, test_clean, learned_params
 
 
@@ -227,3 +354,4 @@ if __name__ == "__main__":
     print("Learned Training Parameters (Never computed on val/test):")
     for k, v in params.items():
         print(f"  {k}: {v:.4f}")
+    
