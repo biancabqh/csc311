@@ -234,7 +234,7 @@ def predict_all(filename):
 
     X = transform_features(df, bundle)
     forest = np.array(bundle["forest"])      # Shape: (3, 133)
-    classes = bundle["classes"]          # ['Soccer', 'Baseball', 'Basketball']
+    classes = np.array(bundle["classes"])          # ['Soccer', 'Baseball', 'Basketball']
 
     n_samples = X.shape[0]
     n_classes = len(classes)
