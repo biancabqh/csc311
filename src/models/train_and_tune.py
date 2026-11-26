@@ -108,7 +108,7 @@ def train_and_evaluate():
     print("\n--- Tuning Model 2: Random Forest ---")
     best_rf = None
     best_rf_score = -1.0
-    depth_candidates = [5, 10, 15, None]
+    depth_candidates = [5, 10, 12, 13, 14, 15, 16, 17, 18, 19, 20, None]
 
     for d in depth_candidates:
         rf = RandomForestClassifier(n_estimators=100, max_depth=d, random_state=42)
@@ -203,14 +203,28 @@ def train_and_evaluate():
         "price_median": float(params["price_median"]),
     }
 
+    rf_bundle = []
+    for estimator in best_rf.estimators_:
+        tree = estimator.tree_
+
+        rf_bundle.append({
+            "children_left": tree.children_left.tolist(),
+            "children_right": tree.children_right.tolist(),
+            "feature": tree.feature.tolist(),
+            "threshold": tree.threshold.tolist(),
+            "value": tree.value.tolist()
+        })
+
     bundle = {
         "feature_cols": feature_cols,
         "classes": classes,
         "imputer_medians": [float(m) for m in imputer.statistics_],
         "scaler": scaler_bundle,
         "tfidf": tfidf_bundle,
-        "weights": best_lr.coef_.tolist(),      # Shape (3, n_features)
-        "biases": best_lr.intercept_.tolist()   # Shape (3,)
+        "forest": rf_bundle,
+        # "weights": best_lr.coef_.tolist(),      # Shape (3, n_features)
+        # "biases": best_lr.intercept_.tolist()   # Shape (3,)
+
     }
 
     output_path = os.path.join(PROJECT_ROOT, "src", "prediction", "model_bundle.json")

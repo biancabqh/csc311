@@ -196,6 +196,33 @@ def transform_features(df_raw, bundle):
 
     return X
 
+def predict_tree(tree, X, n_classes):
+    """
+    Predicts class labels for input features X using a single decision tree.
+    """
+    n_samples = X.shape[0]
+    predictions = np.zeros((n_samples, n_classes), dtype=int)
+
+    for i in range(n_samples):
+        node = 0
+        while True:
+            left_child = tree["children_left"][node]
+            right_child = tree["children_right"][node]
+            if left_child == -1 and right_child == -1:
+                # Leaf node
+                value = np.array(tree["value"][node][0], dtype=float)
+                predictions[i] = value / value.sum()
+                break
+            else:
+                feature_idx = tree["feature"][node]
+                threshold = tree["threshold"][node]
+                if X[i, feature_idx] <= threshold:
+                    node = left_child
+                else:
+                    node = right_child
+
+    return predictions
+
 
 def predict_all(filename):
     """
@@ -206,16 +233,24 @@ def predict_all(filename):
     bundle = load_model_bundle()
 
     X = transform_features(df, bundle)
-    W = np.array(bundle["weights"])      # Shape: (3, 133)
-    b = np.array(bundle["biases"])       # Shape: (3,)
+    forest = np.array(bundle["forest"])      # Shape: (3, 133)
     classes = bundle["classes"]          # ['Soccer', 'Baseball', 'Basketball']
 
-    # Multinomial Logistic Regression score: z = X W^T + b
-    logits = np.dot(X, W.T) + b
-    pred_indices = np.argmax(logits, axis=1)
+    n_samples = X.shape[0]
+    n_classes = len(classes)
+    forest_probs = np.zeros((n_samples, n_classes))
 
-    predictions = [classes[idx] for idx in pred_indices]
-    return predictions
+    for tree in forest:
+        forest_probs += predict_tree(tree, X, n_classes)
+
+    forest_probs /= len(forest)
+
+    # Multinomial Logistic Regression score: z = X W^T + b
+    # logits = np.dot(X, W.T) + b
+    # pred_indices = np.argmax(logits, axis=1)
+
+    # predictions = [classes[idx] for idx in pred_indices]
+    return classes[np.argmax(forest_probs, axis=1)]
 
 
 if __name__ == "__main__":
