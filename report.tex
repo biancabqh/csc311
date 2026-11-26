@@ -299,7 +299,11 @@ The following describes the metrics used to compare the final models from each f
 
 \subsection*{Model Performance}
 
-The table below shows the comparison of all three model performances and based on the results, the random forest model performs the best on the training and validation data. It has the highest value across all metrics indicating that it predicts  The accuracy for validation is quite high but we suspect it is due to a validation split that is particularly easy to predict. Thus 
+The table below shows the comparison of all three model performances and based on the results, the random forest model performs the best on the training and validation data. Specifically, it shows the highest training accuracy of 0.9951 and a lower accuracy of 0.9535; however, there could be some degree of overfitting as the training accuracy is higher than the validation accuracy. The Random Forest + Naive Bayes model has the second best metric values; however, its high training accuracy is likely indication for overfitting. Softmax regression performed relatively well across all metrics with no clear signs of overfitting. Finally, the Naive Bayes-only model performed poorly and had significantly lower metrics than the other three models indicating underfitting. 
+
+Because the data contains a mixture of feature types and features likely have complex interactions, it is expected that random forest performs well. The Naive Bayes + Random Forest likely performed slightly worse because Naive Bayes on its own performs worse than Random Forest so by taking the weighted average, the Naive Bayes is diluting the Random Forest's good predictions. Finally, softmax regression performed worse than random forest likely because the relationship between the features and target may involve nonlinear patterns.
+
+The metrics for validation across models are all quite high but we suspect it is due to a validation split that is particularly easy to predict and could change if the validation split was different due to the small dataset size. Data leakage is not suspected as we shuffled the report labels in the training set and trained the same models after which the validation accuracy dropped to 0.33.
 \begin{table}[h]
     \centering
     \caption{Comparison of Model Performance}
@@ -322,6 +326,76 @@ The table below shows the comparison of all three model performances and based o
     \end{tabular}%
     }
 \end{table}
+
+\subsection*{Misclassifications}
+
+In table 8 below, the models struggle distinguishing between classes 0 and 1 which maps to soccer and baseball. Basketball on the other hand is the most easy to distinguish. However, in general, there are only few misclassifications but most appear to be between the categories ``soccer'' and ``baseball''.
+
+\begin{table}[H]
+    \centering
+    \caption{Confusion Matrices for the Four Classification Models}
+    \label{tab:confusion_matrices}
+    \small
+
+    % First row
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \textbf{(a) Softmax Regression}\\[4pt]
+        \begin{tabular}{c|ccc}
+            & 0 & 1 & 2 \\
+            \hline
+            0 & 40 & 1 & 2 \\
+            1 & 2 & 41 & 0 \\
+            2 & 1 & 1 & 41 \\
+        \end{tabular}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \textbf{(b) Random Forest}\\[4pt]
+        \begin{tabular}{c|ccc}
+            & 0 & 1 & 2 \\
+            \hline
+            0 & 40 & 3 & 0 \\
+            1 & 2 & 41 & 0 \\
+            2 & 1 & 0 & 42 \\
+        \end{tabular}
+    \end{minipage}
+
+    \vspace{0.6cm}
+
+    % Second row
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \textbf{(c) Multinomial Naive Bayes}\\[4pt]
+        \begin{tabular}{c|ccc}
+            & 0 & 1 & 2 \\
+            \hline
+            0 & 40 & 2 & 1 \\
+            1 & 3 & 39 & 1 \\
+            2 & 2 & 2 & 39 \\
+        \end{tabular}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \textbf{(d) RF + NB Ensemble}\\[4pt]
+        \begin{tabular}{c|ccc}
+            & 0 & 1 & 2 \\
+            \hline
+            0 & 40 & 3 & 0 \\
+            1 & 3 & 40 & 0 \\
+            2 & 1 & 0 & 42 \\
+        \end{tabular}
+    \end{minipage}
+
+    \vspace{0.2cm}
+    \footnotesize
+    Rows represent actual classes; columns represent predicted classes.
+\end{table}
+
+\subsection*{Test Error}
+
 
 % ================================================
 % 8. Contributions and Learning
